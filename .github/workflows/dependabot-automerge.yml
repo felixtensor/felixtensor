@@ -1,42 +1,36 @@
-name: Validate and merge Dependabot updates
+name: Merge validated Dependabot updates
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  workflow_run:
+    workflows: ["Validate Dependabot updates"]
+    types: [completed]
 
 permissions:
   contents: write
   pull-requests: write
 
 jobs:
-  validate-and-merge:
+  merge:
     if: >-
-      github.actor == 'dependabot[bot]' &&
-      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]' &&
+      github.event.workflow_run.repository.full_name == 'felixtensor/felixtensor' &&
       github.repository == 'felixtensor/felixtensor'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out proposed update
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Generate validation card
-        uses: stats-organization/github-readme-stats-action@f9d8133845f40d659a754f78b8484983ba766448 # v2.0.1
-        with:
-          card: stats
-          options: username=felixtensor&show_icons=true&theme=transparent
-          path: ${{ runner.temp }}/stats.svg
-          token: ${{ github.token }}
-
-      - name: Validate generated SVG
-        shell: bash
-        run: |
-          test -s "${RUNNER_TEMP}/stats.svg"
-          grep -Eq '<svg([[:space:]>])' "${RUNNER_TEMP}/stats.svg"
-
-      - name: Squash-merge validated update
+      - name: Squash-merge validated Dependabot update
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
-        run: gh pr merge --squash "$PR_URL"
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+        run: |
+          test -n "$PR_NUMBER"
+
+          author="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.user.login')"
+          head_ref="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.ref')"
+          test "$author" = "dependabot[bot]"
+          [[ "$head_ref" == dependabot/* ]]
+
+          gh pr merge --repo "$GITHUB_REPOSITORY" --squash "$PR_NUMBER"

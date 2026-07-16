@@ -1,0 +1,34 @@
+name: Validate Dependabot updates
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.repository == 'felixtensor/felixtensor'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out proposed update
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Generate validation card
+        uses: stats-organization/github-readme-stats-action@f9d8133845f40d659a754f78b8484983ba766448 # v2.0.1
+        with:
+          card: stats
+          options: username=felixtensor&show_icons=true&theme=transparent
+          path: ${{ runner.temp }}/stats.svg
+          token: ${{ github.token }}
+
+      - name: Validate generated SVG
+        shell: bash
+        run: |
+          test -s "${RUNNER_TEMP}/stats.svg"
+          grep -Eq '<svg([[:space:]>])' "${RUNNER_TEMP}/stats.svg"
